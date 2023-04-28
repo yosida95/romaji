@@ -1,0 +1,54 @@
+---
+version: 2.1
+orbs:
+  go: circleci/go@1.7
+jobs:
+  gotest:
+    parameters:
+      goversion:
+        type: string
+    docker:
+      - image: cimg/go:<<parameters.goversion>>
+    environment:
+      ARTIFACTS: /tmp/romaji/artifacts
+      TEST_RESULTS: /tmp/romaji/results
+    steps:
+      - checkout: {}
+      - run:
+          name: Setup test environment
+          command: |
+            mkdir -p "${ARTIFACTS}"
+            mkdir -p "${TEST_RESULTS}"
+      - go/load-cache:
+          key: go-mod-<< parameters.goversion >>
+      - go/mod-download: {}
+      - go/save-cache:
+          key: go-mod-<< parameters.goversion >>
+      - run:
+          name: Run unit tests
+          command: |
+            gotestsum \
+              --junitfile "${TEST_RESULTS}/junit.xml" \
+              -- \
+              -v \
+              -race \
+              -coverprofile="${ARTIFACTS}/coverage.out" \
+              ./...
+            go tool cover \
+              -html="${ARTIFACTS}/coverage.out" \
+              -o "${ARTIFACTS}/coverage.html"
+      - store_artifacts:
+          path: /tmp/artifacts
+      - store_test_results:
+          path: /tmp/test-results
+workflows:
+  version: 2
+  build_and_deploy:
+    jobs:
+      - gotest:
+          name: gotest-<<matrix.goversion>>
+          matrix:
+            parameters:
+              goversion:
+                - "1.19"
+                - "1.20"
