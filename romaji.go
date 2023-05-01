@@ -122,8 +122,9 @@ func fromKana(table map[string]string, in string) string {
 
 func toKana(table map[string][]string, in string) []string {
 	type candidate struct {
-		out strings.Builder
-		i   int
+		out  strings.Builder
+		next string
+		i    int
 	}
 	type cache struct {
 		out string
@@ -156,15 +157,29 @@ func toKana(table map[string][]string, in string) []string {
 		}
 		seen[key] = struct{}{}
 
-		if p.i == len(in) {
-			ret = append(ret, p.out.String())
+		roman := in[p.i:]
+		if n := len(roman); n > 0 {
+			if vowel := strings.IndexAny(roman, "AIUEO"); 0 <= vowel && vowel < n /* BCE */ {
+				roman = roman[0 : vowel+1]
+			}
+		}
+		if roman == "" {
+			if p.next == "" {
+				ret = append(ret, p.out.String())
+			}
+			continue
+		}
+		if p.next != "" {
+			rune, size := utf8.DecodeRuneInString(roman)
+			if !strings.ContainsRune(p.next, rune) {
+				continue
+			}
+			p.i += size
+			p.next = ""
+			stack = append(stack, p)
 			continue
 		}
 
-		roman := in[p.i:]
-		if vowel := strings.IndexAny(roman, "AIUEO"); vowel >= 0 {
-			roman = roman[:vowel+1]
-		}
 		if len(roman) >= 2 && roman[0] == 'N' && roman[1] != '-' {
 			alt := &candidate{i: p.i + 1}
 			alt.out.WriteString(p.out.String())
@@ -185,6 +200,9 @@ func toKana(table map[string][]string, in string) []string {
 			stack = append(stack, next)
 
 			alt := &candidate{i: p.i}
+			if last := roman[len(roman)-1]; last == 'I' || last == 'E' {
+				alt.next = "I"
+			}
 			alt.out.WriteString(next.out.String())
 			alt.out.WriteString("ー")
 			stack = append(stack, alt)
